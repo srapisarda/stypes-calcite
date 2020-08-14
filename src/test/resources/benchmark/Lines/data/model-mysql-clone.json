@@ -1,6 +1,6 @@
 {
   version: '1.0',
-  defaultSchema: 'CALCITE_TEST',
+  defaultSchema: 'CALCITE_TEST_CLONE',
   schemas: [
     {
       name: 'CALCITE_TEST',
@@ -11,6 +11,14 @@
         jdbcUrl: 'jdbc:mysql://localhost/calcite_test',
         jdbcUser: 'root',
         jdbcPassword: 'Salvat0re'
+      }
+    },
+    {
+      name: 'CALCITE_TEST_CLONE',
+      type: 'custom',
+      factory: 'org.apache.calcite.adapter.clone.CloneSchema$Factory',
+      operand: {
+        source: 'CALCITE_TEST'
       }
     }
   ]

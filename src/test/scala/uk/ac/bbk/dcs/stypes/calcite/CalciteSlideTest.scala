@@ -84,7 +84,7 @@ class CalciteSlideTest extends FunSpec {
       "FROM TTLA_ONE A  " +
       "INNER JOIN TTLR_ONE B1 ON A.X = B1.X " +
       "INNER JOIN TTLR_ONE B2 ON B2.X = B1.X " +
-      "INNER JOIN TTLR_ONE D1 ON D1.X = B2.Y "
+      "INNER JOIN TTLR_ONE D1 ON D1.X = B2.Y " +
       "INNER JOIN EMPTY_T C1 ON C1.X = B2.Y " +
       "INNER JOIN EMPTY_T C2 ON C1.X = C2.X "
 
@@ -97,7 +97,7 @@ class CalciteSlideTest extends FunSpec {
     // Validate query
     val catalogReader = createCatalogReader()
     val validator = SqlValidatorUtil.newValidator(
-      SqlStdOperatorTable.instance(), catalogReader, typeFactory, SqlConformanceEnum.DEFAULT)
+      SqlStdOperatorTable.instance(), catalogReader, typeFactory)
     val validateSqlNode = validator.validate(sqlNode)
 
     // convert SqlNode to RelNode
@@ -201,7 +201,7 @@ class CalciteSlideTest extends FunSpec {
       // Validate query
       val catalogReader = createCatalogReader()
       val validator = SqlValidatorUtil.newValidator(
-        SqlStdOperatorTable.instance(), catalogReader, typeFactory, SqlConformanceEnum.DEFAULT)
+        SqlStdOperatorTable.instance(), catalogReader, typeFactory)
       val validateSqlNode = validator.validate(sqlNode)
 
       val validated = validator.validate(sqlNode)
@@ -214,7 +214,7 @@ class CalciteSlideTest extends FunSpec {
       val config = SqlToRelConverter.configBuilder()
         .withConfig(frameworkConfig.getSqlToRelConverterConfig)
         .withTrimUnusedFields(false)
-        .withConvertTableAccess(false)
+//        .withConvertTableAccess(false)
         .build()
 
       // SqlNode toRelNode
