@@ -9,9 +9,9 @@ import org.scalatest.{FunSpec, Matchers}
 
 import scala.util.Try
 
-class CalciteSQLTest  extends FunSpec  with Matchers {
+class CalciteSQLTest extends FunSpec with Matchers {
 
-  private val model:String = "src/test/resources/benchmark/Lines/data/model"
+  private val model: String = "src/test/resources/benchmark/Lines/data/model"
 
 
   it("should be print all tables the model contains") {
@@ -69,14 +69,13 @@ class CalciteSQLTest  extends FunSpec  with Matchers {
       "INNER JOIN EMPTY_T C ON C.X = B.Y "
     )
       .returns(List("PLAN=EnumerableAggregate(group=[{}], C=[COUNT()])\n" +
-        "  EnumerableJoin(condition=[=($0, $2)], joinType=[inner])\n" +
-        "    EnumerableInterpreter\n" +
-        "      BindableTableScan(table=[[STYPES, TTLA_ONE]])\n" +
-        "    EnumerableJoin(condition=[=($0, $2)], joinType=[inner])\n" +
-        "      EnumerableInterpreter\n" +
-        "        BindableTableScan(table=[[STYPES, EMPTY_T]])\n" +
-        "      EnumerableInterpreter\n" +
-        "        BindableTableScan(table=[[STYPES, TTLR_ONE]])\n"
+        "  EnumerableHashJoin(condition=[=($0, $3)], joinType=[inner])\n" +
+        "    EnumerableTableScan(table=[[STYPES, EMPTY_T]])\n" +
+        "    EnumerableMergeJoin(condition=[=($0, $1)], joinType=[inner])\n" +
+        "      EnumerableSort(sort0=[$0], dir0=[ASC])\n" +
+        "        EnumerableTableScan(table=[[STYPES, TTLA_ONE]])\n" +
+        "      EnumerableSort(sort0=[$0], dir0=[ASC])\n" +
+        "        EnumerableTableScan(table=[[STYPES, TTLR_ONE]])\n"
       ))
       .ok()
   }
@@ -142,8 +141,8 @@ class CalciteSQLTest  extends FunSpec  with Matchers {
 
 
   private def checkSql(sql: String, model: String, consumer: ResultSet => Unit): Unit = {
-    var connection:Option[Connection] = None
-    var statement:Option[Statement] = None
+    var connection: Option[Connection] = None
+    var statement: Option[Statement] = None
 
     val check = Try {
       val info = new Properties
@@ -176,12 +175,12 @@ class CalciteSQLTest  extends FunSpec  with Matchers {
 
 
   /** Returns a function that checks the contents of a result set against an
-    * expected string. */
+   * expected string. */
   private def checkExpected(expected: List[String]): ResultSet => Unit =
     (resultSet: ResultSet) => {
       try {
         val lines: List[String] = collect(resultSet)
-        expected should equal (lines)
+        expected should equal(lines)
       } catch {
         case e: SQLException =>
           throw new RuntimeException(e)
@@ -218,12 +217,12 @@ class CalciteSQLTest  extends FunSpec  with Matchers {
       else throw test.failed.get
     }
 
-    def checking(expect: ResultSet => Unit):Fluent =
+    def checking(expect: ResultSet => Unit): Fluent =
       Fluent(model, sql, expect)
 
     /** Sets the rows that are expected to be returned from the SQL query. */
 
-    def  returns (expectedLines: List[String]): Fluent=
+    def returns(expectedLines: List[String]): Fluent =
       checking(checkExpected(expectedLines))
   }
 

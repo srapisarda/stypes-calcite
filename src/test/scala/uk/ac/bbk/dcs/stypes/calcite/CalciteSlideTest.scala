@@ -1,5 +1,6 @@
 package uk.ac.bbk.dcs.stypes.calcite
 
+import java.io.PrintWriter
 import java.sql.DriverManager
 import java.util
 import java.util.Properties
@@ -12,22 +13,27 @@ import org.apache.calcite.interpreter.Bindables
 import org.apache.calcite.jdbc.{CalciteConnection, CalciteSchema}
 import org.apache.calcite.plan.{ConventionTraitDef, _}
 import org.apache.calcite.plan.hep.{HepPlanner, HepProgram}
+import org.apache.calcite.plan.ConventionTraitDef
 import org.apache.calcite.plan.volcano.VolcanoPlanner
 import org.apache.calcite.prepare.CalciteCatalogReader
-import org.apache.calcite.rel.{RelCollationTraitDef, RelDistributionTraitDef, RelRoot}
+import org.apache.calcite.rel.{RelCollationTraitDef, RelDistributionTraitDef, RelNode, RelRoot, RelWriter}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeSystem}
+import org.apache.calcite.rel.core.JoinRelType
+import org.apache.calcite.rel.externalize.RelWriterImpl
 import org.apache.calcite.rel.rules.{FilterJoinRule, PruneEmptyRules, ReduceExpressionsRule, _}
 import org.apache.calcite.rex.RexBuilder
 import org.apache.calcite.schema.Schemas
+import org.apache.calcite.schema.impl.AbstractSchema
 import org.apache.calcite.sql.SqlDialect
 import org.apache.calcite.sql.`type`.SqlTypeFactoryImpl
 import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.sql.parser.SqlParser
 import org.apache.calcite.sql.validate.{SqlConformance, SqlConformanceEnum, SqlValidatorUtil}
 import org.apache.calcite.sql2rel.{RelDecorrelator, SqlToRelConverter, StandardConvertletTable}
-import org.apache.calcite.tools.{FrameworkConfig, Frameworks, Programs}
+import org.apache.calcite.tools.{FrameworkConfig, Frameworks, Programs, RelBuilder}
 import org.apache.calcite.util.Sources
 import org.scalatest.FunSpec
+import uk.ac.bbk.dcs.stypes.calcite.schema.{TableA, TableR, TableS}
 
 import scala.collection.JavaConverters._
 
@@ -72,12 +78,16 @@ class CalciteSlideTest extends FunSpec {
       Frameworks
         .newConfigBuilder
         .defaultSchema(calciteConnection.getRootSchema)
-//        .parserConfig(SqlParser.configBuilder.setCaseSensitive(false).build)
+        //        .parserConfig(SqlParser.configBuilder.setCaseSensitive(false).build)
         .parserConfig(SqlParser.Config.DEFAULT)
         .traitDefs(ConventionTraitDef.INSTANCE, RelDistributionTraitDef.INSTANCE)
 
     builder.build()
   }
+
+  val rules = Seq(
+    Bindables.BINDABLE_TABLE_SCAN_RULE
+  )
 
   it("should execute the query validation and planning") {
     val sql = " SELECT COUNT(*) as NUM " +
@@ -103,28 +113,18 @@ class CalciteSlideTest extends FunSpec {
     // convert SqlNode to RelNode
     val rexBuilder = createRexBuilder()
 
-    val rules = Seq(
-      FilterProjectTransposeRule.INSTANCE,
-      ProjectMergeRule.INSTANCE,
-      FilterMergeRule.INSTANCE,
-      LoptOptimizeJoinRule.INSTANCE,
-      MaterializedViewFilterScanRule.INSTANCE,
-      Bindables.BINDABLE_TABLE_SCAN_RULE,
-      ProjectTableScanRule.INSTANCE,
-      ProjectTableScanRule.INTERPRETER
-      )
+
     val program = Programs.ofRules(rules.asJava)
 
-    val hepPlanner =  new HepPlanner(
-        HepProgram.builder().addRuleCollection(rules.asJava).build())
+    val hepPlanner = new HepPlanner(
+      HepProgram.builder().addRuleCollection(rules.asJava).build())
 
-
-    val volcanoPlanner = new VolcanoPlanner()
-    volcanoPlanner.addRelTraitDef(ConventionTraitDef.INSTANCE)
-    volcanoPlanner.addRelTraitDef(RelCollationTraitDef.INSTANCE)
-    volcanoPlanner.registerAbstractRelationalRules()
-
-    rules.foreach( role => volcanoPlanner.addRule(role) )
+    //    val volcanoPlanner = new VolcanoPlanner()
+    //    volcanoPlanner.addRelTraitDef(ConventionTraitDef.INSTANCE)
+    //    volcanoPlanner.addRelTraitDef(RelCollationTraitDef.INSTANCE)
+    //    volcanoPlanner.registerAbstractRelationalRules()
+    //
+    //    rules.foreach( role => volcanoPlanner.addRule(role) )
 
     val planner = hepPlanner
 
@@ -146,7 +146,7 @@ class CalciteSlideTest extends FunSpec {
     val convention = JdbcConvention.of(SqlDialect.DatabaseProduct.MSSQL.getDialect, expression, expressionName)
     val trailSet = planner.emptyTraitSet().replace(convention) // .replace( Convention)
     println("The relational expression string before optimized is:\n{}", RelOptUtil.toString(root.rel))
-    val optimised = program.run(planner, root.rel,  trailSet, ImmutableList.of(), ImmutableList.of())
+    val optimised = program.run(planner, root.rel, trailSet, ImmutableList.of(), ImmutableList.of())
 
     System.out.println("-----------------------------------------------------------");
     System.out.println("The Best relational expression string:");
@@ -167,15 +167,10 @@ class CalciteSlideTest extends FunSpec {
     val rootSchema = calciteConnection.getRootSchema
     val frameworkConfig = getFrameworkConfig()
 
-
-    // use HepPlanner// use HepPlanner
-
     val planner = new VolcanoPlanner
     planner.addRelTraitDef(ConventionTraitDef.INSTANCE)
     planner.addRelTraitDef(RelDistributionTraitDef.INSTANCE)
     // add rules
-    planner.addRule(FilterJoinRule.FILTER_ON_JOIN)
-    planner.addRule(ReduceExpressionsRule.PROJECT_INSTANCE)
     planner.addRule(PruneEmptyRules.PROJECT_INSTANCE)
     // add ConverterRule
     planner.addRule(EnumerableRules.ENUMERABLE_MERGE_JOIN_RULE)
@@ -183,6 +178,11 @@ class CalciteSlideTest extends FunSpec {
     planner.addRule(EnumerableRules.ENUMERABLE_VALUES_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_PROJECT_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_FILTER_RULE)
+
+    planner.addRelTraitDef(ConventionTraitDef.INSTANCE)
+    planner.addRelTraitDef(RelCollationTraitDef.INSTANCE)
+
+    rules.foreach(role => planner.addRule(role))
 
     try {
       val factory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT)
@@ -205,7 +205,7 @@ class CalciteSlideTest extends FunSpec {
       val validateSqlNode = validator.validate(sqlNode)
 
       val validated = validator.validate(sqlNode)
-     println("The SqlNode after validated is:\n{}", validated)
+      println("The SqlNode after validated is:\n{}", validated)
 
       val rexBuilder = new RexBuilder(factory)
 
@@ -214,7 +214,7 @@ class CalciteSlideTest extends FunSpec {
       val config = SqlToRelConverter.configBuilder()
         .withConfig(frameworkConfig.getSqlToRelConverterConfig)
         .withTrimUnusedFields(false)
-//        .withConvertTableAccess(false)
+        //        .withConvertTableAccess(false)
         .build()
 
       // SqlNode toRelNode
@@ -233,15 +233,65 @@ class CalciteSlideTest extends FunSpec {
 
       planner.setRoot(relNode)
       relNode = planner.findBestExp()
+      val rw = new RelWriterImpl(new PrintWriter(System.out, true))
+
       System.out.println("-----------------------------------------------------------");
       System.out.println("The Best relational expression string:");
       System.out.println(RelOptUtil.toString(relNode));
       System.out.println("-----------------------------------------------------------");
 
     } catch {
-      case e:Exception =>
+      case e: Exception =>
         e.printStackTrace();
     }
+  }
+
+  it("should execute the query validation and planning(volcano) using scan") {
+    val rootSchema = CalciteSchema.createRootSchema(true).plus
+    val schema = rootSchema.add("CALCITE_TEST", new AbstractSchema())
+    schema.add("TTLA_ONE", TableA())
+    schema.add("EMPTY_T", TableS())
+    schema.add("TTLR_ONE", TableR())
+    val config = Frameworks.newConfigBuilder.defaultSchema(schema).build
+    val builder = RelBuilder.create(config)
+
+    val opTree: RelNode = builder
+      .scan("TTLA_ONE")
+      .scan("TTLR_ONE")
+      .join(JoinRelType.INNER, "X")
+      .scan("EMPTY_T")
+      .join(JoinRelType.INNER, "X")
+      .build()
+
+    val rw = new RelWriterImpl(new PrintWriter(System.out, true))
+
+    opTree.explain(rw)
+    println()
+    val program = HepProgram.builder
+      .addRuleInstance(FilterJoinRule.FILTER_ON_JOIN).build
+
+    val hepPlanner = new HepPlanner(program)
+    hepPlanner.setRoot(opTree)
+    hepPlanner.findBestExp.explain(rw)
+
+    println()
+
+    val cluster = opTree.getCluster
+    val planner = cluster.getPlanner().asInstanceOf[VolcanoPlanner]
+    planner.setRoot(opTree)
+
+    // add rules
+    planner.addRule(PruneEmptyRules.PROJECT_INSTANCE)
+    //     add ConverterRule
+    planner.addRule(EnumerableRules.ENUMERABLE_MERGE_JOIN_RULE)
+    planner.addRule(EnumerableRules.ENUMERABLE_SORT_RULE)
+    planner.addRule(EnumerableRules.ENUMERABLE_VALUES_RULE)
+    planner.addRule(EnumerableRules.ENUMERABLE_PROJECT_RULE)
+    planner.addRule(EnumerableRules.ENUMERABLE_FILTER_RULE)
+    planner.addRule(Bindables.BINDABLE_TABLE_SCAN_RULE)
+    val optimized = planner.findBestExp
+
+    optimized.explain(rw)
   }
 
   private def conformance(config: FrameworkConfig): SqlConformance = {
