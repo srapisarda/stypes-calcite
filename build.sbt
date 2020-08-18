@@ -5,7 +5,7 @@ version := "0.1"
 
 scalaVersion := "2.11.8"
 
-val calciteVersion = "1.23.0-SNAPSHOT"
+val calciteVersion = "1.24.0"
 
 resolvers += Resolver.mavenLocal
 
