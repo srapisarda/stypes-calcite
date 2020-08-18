@@ -256,13 +256,16 @@ class CalciteSlideTest extends FunSpec {
     val builder = RelBuilder.create(config)
 
     val opTree: RelNode = builder
-      .scan("TTLA_ONE")
-      .scan("TTLR_ONE")
+      .scan("TTLA_ONE").as("a")
+      .scan("TTLR_ONE").as("b")
       .join(JoinRelType.INNER, "X")
-      .scan("EMPTY_T")
+      .project(builder.field(0), builder.field(1))
+      .scan("EMPTY_T").as("c")
       .join(JoinRelType.INNER, "X")
+      .project(builder.field(0), builder.field(2))
       .build()
 
+    opTree.getCluster.traitSet().replace(EnumerableConvention.INSTANCE);
     val rw = new RelWriterImpl(new PrintWriter(System.out, true))
 
     opTree.explain(rw)
@@ -277,8 +280,10 @@ class CalciteSlideTest extends FunSpec {
     println()
 
     val cluster = opTree.getCluster
-    val planner = cluster.getPlanner().asInstanceOf[VolcanoPlanner]
-    planner.setRoot(opTree)
+    val desiredTraits = cluster.traitSet.replace(EnumerableConvention.INSTANCE)
+    val planner = cluster.getPlanner.asInstanceOf[VolcanoPlanner]
+    val newRoot = planner.changeTraits(opTree, desiredTraits)
+    planner.setRoot(newRoot)
 
     // add rules
     planner.addRule(PruneEmptyRules.PROJECT_INSTANCE)
