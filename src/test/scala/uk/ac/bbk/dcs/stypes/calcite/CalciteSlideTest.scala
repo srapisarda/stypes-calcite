@@ -256,11 +256,11 @@ class CalciteSlideTest extends FunSpec {
     val builder = RelBuilder.create(config)
 
     val opTree: RelNode = builder
-      .scan("TTLA_ONE").as("a")
-      .scan("TTLR_ONE").as("b")
+      .scan("TTLA_ONE")
+      .scan("TTLR_ONE")
       .join(JoinRelType.INNER, "X")
       .project(builder.field(0), builder.field(1))
-      .scan("EMPTY_T").as("c")
+      .scan("EMPTY_T")
       .join(JoinRelType.INNER, "X")
       .project(builder.field(0), builder.field(2))
       .build()
@@ -289,11 +289,20 @@ class CalciteSlideTest extends FunSpec {
     planner.addRule(PruneEmptyRules.PROJECT_INSTANCE)
     //     add ConverterRule
     planner.addRule(EnumerableRules.ENUMERABLE_MERGE_JOIN_RULE)
+    planner.addRule(EnumerableRules.ENUMERABLE_JOIN_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_SORT_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_VALUES_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_PROJECT_RULE)
     planner.addRule(EnumerableRules.ENUMERABLE_FILTER_RULE)
     planner.addRule(Bindables.BINDABLE_TABLE_SCAN_RULE)
+    planner.addRule(CoreRules.JOIN_TO_MULTI_JOIN)
+    planner.addRule(CoreRules.JOIN_ASSOCIATE)
+    planner.addRule(CoreRules.JOIN_REDUCE_EXPRESSIONS)
+    planner.addRule(CoreRules.MULTI_JOIN_OPTIMIZE)
+    planner.addRule(CoreRules.JOIN_TO_SEMI_JOIN)
+    planner.addRelTraitDef(ConventionTraitDef.INSTANCE)
+    planner.addRelTraitDef(RelCollationTraitDef.INSTANCE)
+
     val optimized = planner.findBestExp
 
     optimized.explain(rw)
