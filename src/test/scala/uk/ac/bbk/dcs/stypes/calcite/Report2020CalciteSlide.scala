@@ -4,27 +4,33 @@ import java.io.PrintWriter
 
 import org.apache.calcite.adapter.enumerable.{EnumerableConvention, EnumerableRules}
 import org.apache.calcite.interpreter.Bindables
-import org.apache.calcite.jdbc.{CalciteSchema}
+import org.apache.calcite.jdbc.CalciteSchema
 import org.apache.calcite.plan.{ConventionTraitDef, _}
 import org.apache.calcite.plan.hep.{HepPlanner, HepProgram}
 import org.apache.calcite.plan.volcano.VolcanoPlanner
 import org.apache.calcite.rel.core.JoinRelType
 import org.apache.calcite.rel.externalize.RelWriterImpl
-import org.apache.calcite.rel.rules.{FilterJoinRule, PruneEmptyRules, _}
+import org.apache.calcite.rel.rules.materialize.MaterializedViewRules
+import org.apache.calcite.rel.rules.{FilterJoinRule, FilterProjectTransposeRule, PruneEmptyRules, _}
 import org.apache.calcite.rel.{RelCollationTraitDef, RelDistributionTraitDef, RelNode, RelRoot}
 import org.apache.calcite.schema.impl.AbstractSchema
 import org.apache.calcite.tools.{Frameworks, RelBuilder}
 import org.scalatest.FunSpec
 import uk.ac.bbk.dcs.stypes.calcite.schema.{TableA, TableR, TableS}
+import scala.collection.JavaConverters._
+
+import scala.io.Source
 
 class Report2020CalciteSlide extends FunSpec {
 
   it("should execute the query validation and planning(volcano) using scan") {
     val rootSchema = CalciteSchema.createRootSchema(true).plus
     val schema = rootSchema.add("CALCITE_TEST", new AbstractSchema())
-    schema.add("TTLA_ONE", TableA())
-    schema.add("EMPTY_T", TableS())
-    schema.add("TTLR_ONE", TableR())
+
+    schema.add("TTLA_ONE", TableA(getRow("1.ttl-A.csv")))
+    schema.add("EMPTY_T", TableS(getRow("1.ttl-S.csv")))
+    schema.add("TTLR_ONE", TableR(getRow("1.ttl-R.csv")))
+
     val config = Frameworks.newConfigBuilder.defaultSchema(schema).build
     val builder = RelBuilder.create(config)
 
@@ -46,7 +52,8 @@ class Report2020CalciteSlide extends FunSpec {
 
     // HepProgram
     val program = HepProgram.builder
-      .addRuleInstance(FilterJoinRule.FILTER_ON_JOIN).build
+      .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+      .build
 
     val hepPlanner = new HepPlanner(program)
     hepPlanner.setRoot(opTree)
@@ -63,20 +70,9 @@ class Report2020CalciteSlide extends FunSpec {
     planner.setRoot(newRoot)
 
     // add rules
-    planner.addRule(PruneEmptyRules.PROJECT_INSTANCE)
+    rules.foreach(_ => planner.addRule(_))
+
     // add ConverterRule
-    planner.addRule(EnumerableRules.ENUMERABLE_MERGE_JOIN_RULE)
-    planner.addRule(EnumerableRules.ENUMERABLE_JOIN_RULE)
-    planner.addRule(EnumerableRules.ENUMERABLE_SORT_RULE)
-    planner.addRule(EnumerableRules.ENUMERABLE_VALUES_RULE)
-    planner.addRule(EnumerableRules.ENUMERABLE_PROJECT_RULE)
-    planner.addRule(EnumerableRules.ENUMERABLE_FILTER_RULE)
-    planner.addRule(Bindables.BINDABLE_TABLE_SCAN_RULE)
-    planner.addRule(CoreRules.JOIN_TO_MULTI_JOIN)
-    planner.addRule(CoreRules.JOIN_ASSOCIATE)
-    planner.addRule(CoreRules.JOIN_REDUCE_EXPRESSIONS)
-    planner.addRule(CoreRules.MULTI_JOIN_OPTIMIZE)
-    planner.addRule(CoreRules.JOIN_TO_SEMI_JOIN)
     planner.addRelTraitDef(ConventionTraitDef.INSTANCE)
     planner.addRelTraitDef(RelCollationTraitDef.INSTANCE)
 
@@ -86,8 +82,30 @@ class Report2020CalciteSlide extends FunSpec {
     optimized.explain(rw)
   }
 
-  val rules = Seq(
-    Bindables.BINDABLE_TABLE_SCAN_RULE
+  val rules = Set(
+    PruneEmptyRules.PROJECT_INSTANCE,
+    EnumerableRules.ENUMERABLE_MERGE_JOIN_RULE,
+    EnumerableRules.ENUMERABLE_JOIN_RULE,
+    EnumerableRules.ENUMERABLE_SORT_RULE,
+    EnumerableRules.ENUMERABLE_VALUES_RULE,
+    EnumerableRules.ENUMERABLE_PROJECT_RULE,
+    EnumerableRules.ENUMERABLE_FILTER_RULE,
+    Bindables.BINDABLE_TABLE_SCAN_RULE,
+    CoreRules.FILTER_PROJECT_TRANSPOSE,
+    CoreRules.PROJECT_MERGE,
+    CoreRules.FILTER_MERGE,
+    CoreRules.PROJECT_TABLE_SCAN,
+    CoreRules.PROJECT_INTERPRETER_TABLE_SCAN,
+    CoreRules.JOIN_TO_MULTI_JOIN,
+    CoreRules.JOIN_ASSOCIATE,
+    CoreRules.JOIN_REDUCE_EXPRESSIONS,
+    CoreRules.MULTI_JOIN_OPTIMIZE,
+    CoreRules.JOIN_TO_SEMI_JOIN,
+    CoreRules.AGGREGATE_JOIN_TRANSPOSE,
+    MaterializedViewRules.FILTER_SCAN
   )
 
+  def getRow(fileName: String) = Source.fromFile(s"src/test/resources/benchmark/Lines/data/csv/$fileName").getLines().map(
+    line => line.split(",").toArray.asInstanceOf[Array[AnyRef]]
+  ).toList
 }
