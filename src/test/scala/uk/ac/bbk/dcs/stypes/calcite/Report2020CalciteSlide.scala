@@ -17,7 +17,6 @@ import org.apache.calcite.schema.impl.AbstractSchema
 import org.apache.calcite.tools.{Frameworks, RelBuilder}
 import org.scalatest.FunSpec
 import uk.ac.bbk.dcs.stypes.calcite.schema.{TableA, TableR, TableS}
-import scala.collection.JavaConverters._
 
 import scala.io.Source
 
