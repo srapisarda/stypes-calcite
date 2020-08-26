@@ -8,29 +8,47 @@ import org.apache.calcite.jdbc.CalciteSchema
 import org.apache.calcite.plan.{ConventionTraitDef, _}
 import org.apache.calcite.plan.hep.{HepPlanner, HepProgram}
 import org.apache.calcite.plan.volcano.VolcanoPlanner
+import org.apache.calcite.rel.`type`.RelDataTypeFactory
 import org.apache.calcite.rel.core.JoinRelType
 import org.apache.calcite.rel.externalize.RelWriterImpl
 import org.apache.calcite.rel.rules.materialize.MaterializedViewRules
 import org.apache.calcite.rel.rules.{FilterJoinRule, FilterProjectTransposeRule, PruneEmptyRules, _}
 import org.apache.calcite.rel.{RelCollationTraitDef, RelDistributionTraitDef, RelNode, RelRoot}
+import org.apache.calcite.schema.SchemaPlus
 import org.apache.calcite.schema.impl.AbstractSchema
-import org.apache.calcite.tools.{Frameworks, RelBuilder}
+import org.apache.calcite.sql.`type`.SqlTypeName
+import org.apache.calcite.tools.{FrameworkConfig, Frameworks, RelBuilder}
 import org.scalatest.FunSpec
-import uk.ac.bbk.dcs.stypes.calcite.schema.{TableA, TableR, TableS}
+import uk.ac.bbk.dcs.stypes.calcite.schema.{TableA, TableR, TableS, TestTable}
 
 import scala.io.Source
 
 class Report2020CalciteSlide extends FunSpec {
+  private val rootSchema: SchemaPlus = CalciteSchema.createRootSchema(true).plus
+  private val schema: SchemaPlus = rootSchema.add("CALCITE_TEST", new AbstractSchema())
+
+  private val relDataTypeX =
+    (typeFactory: RelDataTypeFactory) => typeFactory
+      .builder
+      .add("X", SqlTypeName.INTEGER)
+      .build()
+
+  private val relDataTypeXY =
+    (typeFactory: RelDataTypeFactory) => typeFactory
+      .builder
+      .add("X", SqlTypeName.INTEGER)
+      .add("Y", SqlTypeName.INTEGER)
+      .build()
+
+  schema.add("TTLA_ONE", TestTable(getRow("1.ttl-A.csv"), relDataTypeX))
+  schema.add("EMPTY_T", TestTable(getRow("1.ttl-S.csv"), relDataTypeXY))
+  schema.add("TTLR_ONE", TestTable(getRow("1.ttl-R.csv"), relDataTypeXY))
+
+
+  val config: FrameworkConfig = Frameworks.newConfigBuilder.defaultSchema(schema).build
 
   it("should execute the query validation and planning(volcano) using scan") {
-    val rootSchema = CalciteSchema.createRootSchema(true).plus
-    val schema = rootSchema.add("CALCITE_TEST", new AbstractSchema())
 
-    schema.add("TTLA_ONE", TableA(getRow("1.ttl-A.csv")))
-    schema.add("EMPTY_T", TableS(getRow("1.ttl-S.csv")))
-    schema.add("TTLR_ONE", TableR(getRow("1.ttl-R.csv")))
-
-    val config = Frameworks.newConfigBuilder.defaultSchema(schema).build
     val builder = RelBuilder.create(config)
 
     val opTree: RelNode = builder
@@ -69,7 +87,7 @@ class Report2020CalciteSlide extends FunSpec {
     planner.setRoot(newRoot)
 
     // add rules
-    rules.foreach(_ => planner.addRule(_))
+    rules.foreach(planner.addRule)
 
     // add ConverterRule
     planner.addRelTraitDef(ConventionTraitDef.INSTANCE)
@@ -80,6 +98,7 @@ class Report2020CalciteSlide extends FunSpec {
 
     optimized.explain(rw)
   }
+
 
   val rules = Set(
     PruneEmptyRules.PROJECT_INSTANCE,

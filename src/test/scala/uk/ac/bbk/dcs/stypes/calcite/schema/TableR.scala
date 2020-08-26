@@ -4,9 +4,8 @@ import com.google.common.collect.ImmutableList
 import org.apache.calcite.DataContext
 import org.apache.calcite.config.CalciteConnectionConfig
 import org.apache.calcite.linq4j.{Enumerable, Linq4j}
-import org.apache.calcite.rel.RelCollations
-import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory, RelProtoDataType}
-import org.apache.calcite.schema.{ScannableTable, Schema, Statistic, Statistics, Table}
+import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
+import org.apache.calcite.schema.{ScannableTable, Schema, Statistic, Statistics}
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.{SqlCall, SqlNode}
 import scala.collection.JavaConverters._
@@ -21,8 +20,7 @@ case class TableR(rows: List[Array[AnyRef]] = Nil) extends ScannableTable {
 
   override def getRowType(typeFactory: RelDataTypeFactory): RelDataType = protoRowType(typeFactory)
 
-  override def getStatistic: Statistic = Statistics.of(61390d, ImmutableList.of(),
-    RelCollations.createSingleton(0));
+  override def getStatistic: Statistic = Statistics.of(rows.size,  ImmutableList.of(), ImmutableList.of());
 
   override def getJdbcTableType: Schema.TableType = Schema.TableType.TABLE
 

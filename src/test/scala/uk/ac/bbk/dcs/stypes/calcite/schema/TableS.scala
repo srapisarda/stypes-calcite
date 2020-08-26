@@ -21,7 +21,7 @@ case class TableS(rows: List[Array[AnyRef]] = Nil) extends ScannableTable {
 
   override def getRowType(typeFactory: RelDataTypeFactory): RelDataType = protoRowType.apply(typeFactory)
 
-  override def getStatistic: Statistic = Statistics.of(0d, ImmutableList.of(),
+  override def getStatistic: Statistic = Statistics.of(rows.size, ImmutableList.of(),
     RelCollations.createSingleton(0));
 
   override def getJdbcTableType: Schema.TableType = Schema.TableType.TABLE
